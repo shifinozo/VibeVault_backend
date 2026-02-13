@@ -12,7 +12,12 @@ import cors from "cors"
 
 const app = express()
 app.use(express.json())
-app.use(cors())
+
+app.use(cors({
+    origin: ["https://vibe-vault-frontend-one.vercel.app", "http://localhost:5173"],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
+}))
 //-------------------------------------
 
 connectDB()
