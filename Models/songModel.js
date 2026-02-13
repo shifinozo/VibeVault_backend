@@ -5,13 +5,20 @@ const songSchema = new mongoose.Schema({
     title : {
         type:String,
         required:true,
-        unique:true
+        unique:true,
+        lowercase:true
     },
     artist: {
         type:String,
-        required:true
+        required:true,
+        lowercase:true
     },
     filePath: {
+        type:String,
+        required:false,
+        unique:true
+    },
+    imagePath:{
         type:String,
         required:false,
         unique:true

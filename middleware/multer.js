@@ -24,32 +24,48 @@ import path from 'path'
 //   storage: storage,
 //   fileFilter: fileFilter,
 // });
+///////////////////////---------------------original--------------///////
 
+// const fileFilter = (req, file, cb) => {
+//   const allowed = ["audio/mpeg", "audio/mp3"];
+
+//   if (allowed.includes(file.mimetype)) {
+//     cb(null, true);
+//   } else {
+//     cb(new Error("Only .mp3 files are allowed"), false);
+//   }
+// };
+
+
+
+// const storage = multer.memoryStorage()
+
+// const upload = multer({ storage, fileFilter });
+
+// export default upload
+
+
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
-  const allowed = ["audio/mpeg", "audio/mp3"];
-
-  if (allowed.includes(file.mimetype)) {
+  if (
+    file.mimetype.startsWith("audio/") ||
+    file.mimetype.startsWith("image/")
+  ) {
     cb(null, true);
   } else {
-    cb(new Error("Only .mp3 files are allowed"), false);
+    cb(new Error("Only audio and image files are allowed"), false);
   }
 };
 
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: 25 * 1024 * 1024, // 25MB
+  },
+});
 
 
-const storage = multer.memoryStorage()
 
-const upload = multer({ storage, fileFilter });
-
-export default upload
-
-// // temporary local folder
-// const storage = multer.diskStorage({
-//   destination: (req, file, cb) => {
-//     cb(null, "uploads/");        // this folder must exist
-//   },
-//   filename: (req, file, cb) => {
-//     cb(null, Date.now() + path.extname(file.originalname));
-//   }
-// });
+export default upload;

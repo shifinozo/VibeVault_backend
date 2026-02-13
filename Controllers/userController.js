@@ -1,63 +1,106 @@
 import jwt from 'jsonwebtoken'
 import { userModel } from "../Models/userModel.js"
+import { sendOTPEmail } from "../utils/sendemail.js"
 
-export const adduser = async (req,res)=>{
-    try{
-        console.log("ok good");
-        
+export const requestOTP = async (req, res) => {
+    try {
+        const { email, name } = req.body
+        let user = await userModel.findOne({ email })
 
-        const user= await userModel.create(req.body)
+        // If it's a registration attempt (name provided) and user doesn't exist
+        if (!user && name) {
+            user = await userModel.create({ name, email })
+        } else if (!user) {
+            return res.status(404).send("User not found. Please register first.")
+        }
+
+        // Generate OTP (6-digit code)
+        const otp = Math.floor(100000 + Math.random() * 900000).toString()
+        const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
+
+        user.otp = otp
+        user.otpExpiresAt = otpExpiresAt
+        await user.save()
+
+        // Send Email using utility
+        try {
+            await sendOTPEmail(email, otp)
+            console.log(`OTP sent to ${email} via email.`);
+        } catch (emailError) {
+            console.error("Email Dispatch Failed. Using terminal fallback:");
+            console.log("-----------------------------------------");
+            console.log(`>>> OTP for ${email}: ${otp} <<<`);
+            console.log("-----------------------------------------");
+        }
+
+        res.status(200).json({ message: "OTP sent (check email or server console)" })
+    } catch (error) {
+        console.error("OTP Request Error:", error)
+        res.status(500).send("Failed to send OTP")
+    }
+}
+
+export const verifyOTP = async (req, res) => {
+    try {
+        const { email, otp } = req.body
+        const user = await userModel.findOne({ email })
+
+        if (!user || user.otp !== otp || user.otpExpiresAt < new Date()) {
+            return res.status(400).send("Invalid or expired OTP")
+        }
+
+        // Clear OTP after successful verification
+        user.otp = null
+        user.otpExpiresAt = null
+        await user.save()
+
+        // Issue JWT
         const token = jwt.sign(
             { id: user._id, email: user.email },
             process.env.JWT_SECRET,
             { expiresIn: "1d" }
-            );
+        )
 
-            res.status(201).send({
-            message: "signin successfully",
+        res.status(200).json({
+            message: "Successfully verified",
             token,
-            data: user
-            });
-            console.log("token:",token);
-            
-        
-    }catch(error){
-        console.log("errroorr",error);
-        res.status(500).send("signup failed")
+            user
+        })
+    } catch (error) {
+        console.error("OTP Verification Error:", error)
+        res.status(500).send("Verification failed")
     }
 }
 
-export const loginuser = async (req,res)=>{
-    try{
-        const{email}=req.body
-        const loginuser= await userModel.findOne({email})
-        console.log(loginuser);
+// Registration still triggers OTP
+export const adduser = async (req, res) => {
+    await requestOTP(req, res)
+}
 
+// loginuser now issues JWT directly if user exists
+export const loginuser = async (req, res) => {
+    try {
+        const { email } = req.body
+        const user = await userModel.findOne({ email })
 
-        if (!loginuser) {
-            return res.status(404).send("user not found !!!")
+        if (!user) {
+            return res.status(404).send("User not found. Please register first.")
         }
-        console.log(loginuser._id);
-        
 
+        // Issue JWT directly for login
         const token = jwt.sign(
-        { id: loginuser._id, email: loginuser.email },
-         process.env.JWT_SECRET,
-        { expiresIn: "1d" }
+            { id: user._id, email: user.email },
+            process.env.JWT_SECRET,
+            { expiresIn: "1d" }
         )
-        console.log("user unddoooo",loginuser._id);
-        
-        console.log(token);
-        
 
         res.status(200).json({
-        message: "Successfully login",
-        token: token,  
-        user: loginuser
-        });
-        
-    }catch(error){
-        console.log("error",error);
-        res.status(500).send("login failed")
+            message: "Successfully login",
+            token,
+            user
+        })
+    } catch (error) {
+        console.error("Login Error:", error)
+        res.status(500).send("Login failed")
     }
 }
