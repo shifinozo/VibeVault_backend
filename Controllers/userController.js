@@ -101,6 +101,6 @@ export const loginuser = async (req, res) => {
         })
     } catch (error) {
         console.error("Login Error:", error)
-        res.status(500).send("Login failed")
+        res.status(500).send(`Login failed: ${error.message}`)
     }
 }
