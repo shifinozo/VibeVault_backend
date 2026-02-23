@@ -1,15 +1,17 @@
 import jwt from 'jsonwebtoken'
+import bcrypt from 'bcryptjs'
 import { userModel } from "../Models/userModel.js"
 import { sendOTPEmail } from "../utils/sendemail.js"
 
 export const requestOTP = async (req, res) => {
     try {
-        const { email, name } = req.body
+        const { email, name, password } = req.body
         let user = await userModel.findOne({ email })
 
         // If it's a registration attempt (name provided) and user doesn't exist
         if (!user && name) {
-            user = await userModel.create({ name, email })
+            const hashedPassword = await bcrypt.hash(password, 10)
+            user = await userModel.create({ name, email, password: hashedPassword })
         } else if (!user) {
             return res.status(404).send("User not found. Please register first.")
         }
@@ -77,17 +79,23 @@ export const adduser = async (req, res) => {
     await requestOTP(req, res)
 }
 
-// loginuser now issues JWT directly if user exists
+// loginuser verifies password then issues JWT
 export const loginuser = async (req, res) => {
     try {
-        const { email } = req.body
+        const { email, password } = req.body
         const user = await userModel.findOne({ email })
 
         if (!user) {
             return res.status(404).send("User not found. Please register first.")
         }
 
-        // Issue JWT directly for login
+        // Compare password
+        const isMatch = await bcrypt.compare(password, user.password)
+        if (!isMatch) {
+            return res.status(401).send("Incorrect password.")
+        }
+
+        // Issue JWT
         const token = jwt.sign(
             { id: user._id, email: user.email },
             process.env.JWT_SECRET,
