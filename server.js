@@ -2,6 +2,7 @@ import express from "express"
 import dotenv from 'dotenv'
 dotenv.config()
 
+import mongoose from "mongoose"
 import connectDB from "./config/dbconfig.js"
 import userroute from "./Routes/userRoute.js"
 import songroute from "./Routes/songRoute.js"
@@ -21,6 +22,16 @@ app.use(cors({
 //-------------------------------------
 
 connectDB()
+
+// Without this, requests made while Mongoose isn't connected (e.g. Atlas
+// blocking Vercel's IP) would hang until the query buffer/serverless
+// timeout kicked in, which the browser reports as a generic Network Error.
+app.use((req, res, next) => {
+    if (mongoose.connection.readyState !== 1) {
+        return res.status(503).send("Database unavailable. Check MongoDB Atlas Network Access allows this server's IP.")
+    }
+    next()
+})
 
 app.use('/pjct', userroute, songroute, playlistRoute)
 
