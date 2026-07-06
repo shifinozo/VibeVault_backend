@@ -1,6 +1,7 @@
 import cloudinary from "../config/cloudinaryconfig.js";
 import { songModel } from "../Models/songModel.js";
 import { fetchJamendoTracks } from "../config/jamendoconfig.js";
+import { fetchAudiusTracks } from "../config/audiusconfig.js";
 
 // Vercel serverless functions cap request bodies at ~4.5MB, so audio/image
 // files can't be uploaded through this backend. The frontend instead uploads
@@ -135,29 +136,34 @@ export const addsong = async (req, res) => {
 // }
 
 
-// External tracks (e.g. Jamendo) use a synthetic id like "jamendo-168" and
-// aren't real songModel documents, but playlist.songs stores ObjectId refs.
-// This gets-or-creates a local record so the track can be referenced there.
-export const upsertExternalSong = async ({ jamendoId, title, artist, filePath, imagePath }) => {
+// External tracks (e.g. Jamendo, Audius) use a synthetic id like
+// "jamendo-168" or "audius-AxPQgQ0" and aren't real songModel documents, but
+// playlist.songs stores ObjectId refs. This gets-or-creates a local record
+// so the track can be referenced there.
+export const upsertExternalSong = async ({ externalId, title, artist, filePath, imagePath }) => {
   return songModel.findOneAndUpdate(
-    { jamendoId },
-    { jamendoId, title, artist, filePath, imagePath },
+    { externalId },
+    { externalId, title, artist, filePath, imagePath },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   )
 }
 
 export const getsongs = async (req, res) => {
   try {
-    const [getsong, jamendoSongs] = await Promise.all([
+    const [getsong, jamendoSongs, audiusSongs] = await Promise.all([
       songModel.find(),
-      // Don't let a Jamendo outage take down the whole songs list.
+      // Don't let an external API outage take down the whole songs list.
       fetchJamendoTracks({ limit: 30 }).catch((error) => {
         console.log("jamendo fetch failed", error);
         return [];
       }),
+      fetchAudiusTracks({ limit: 30 }).catch((error) => {
+        console.log("audius fetch failed", error);
+        return [];
+      }),
     ])
 
-    res.status(200).send({ message: "all songs ", data: [...getsong, ...jamendoSongs] })
+    res.status(200).send({ message: "all songs ", data: [...getsong, ...jamendoSongs, ...audiusSongs] })
 
   } catch (error) {
     console.log("errorr", error);

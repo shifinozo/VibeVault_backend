@@ -73,13 +73,13 @@ export const findandupdateplaylist = async (req, res) => {
         let resolvedSongId = songid
 
         if (!mongoose.Types.ObjectId.isValid(songid)) {
-            // External track (e.g. Jamendo) - not a real songModel document yet,
-            // so get-or-create a local record and reference that instead.
+            // External track (e.g. Jamendo, Audius) - not a real songModel
+            // document yet, so get-or-create a local record and reference that instead.
             const { title, artist, filePath, imagePath } = req.body
             if (!title || !artist || !filePath) {
                 return res.status(400).json({ message: "Missing track details for external song" })
             }
-            const localSong = await upsertExternalSong({ jamendoId: songid, title, artist, filePath, imagePath })
+            const localSong = await upsertExternalSong({ externalId: songid, title, artist, filePath, imagePath })
             resolvedSongId = localSong._id.toString()
         }
 

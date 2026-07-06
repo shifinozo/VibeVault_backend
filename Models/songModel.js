@@ -23,7 +23,7 @@ const songSchema = new mongoose.Schema({
         required:false,
         unique:true
     },
-    jamendoId: {
+    externalId: {
         type:String,
         required:false,
         unique:true,
