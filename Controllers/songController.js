@@ -1,5 +1,6 @@
 import cloudinary, { uploadToCloudinary } from "../config/cloudinaryconfig.js";
 import { songModel } from "../Models/songModel.js";
+import { fetchJamendoTracks } from "../config/jamendoconfig.js";
 import streamifier from "streamifier"
 
 // MP3 uploader
@@ -148,12 +149,29 @@ export const addsong = async (req, res) => {
 // }
 
 
+// External tracks (e.g. Jamendo) use a synthetic id like "jamendo-168" and
+// aren't real songModel documents, but playlist.songs stores ObjectId refs.
+// This gets-or-creates a local record so the track can be referenced there.
+export const upsertExternalSong = async ({ jamendoId, title, artist, filePath, imagePath }) => {
+  return songModel.findOneAndUpdate(
+    { jamendoId },
+    { jamendoId, title, artist, filePath, imagePath },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  )
+}
+
 export const getsongs = async (req, res) => {
   try {
-    const getsong = await songModel.find()
-    console.log(getsong);
+    const [getsong, jamendoSongs] = await Promise.all([
+      songModel.find(),
+      // Don't let a Jamendo outage take down the whole songs list.
+      fetchJamendoTracks({ limit: 30 }).catch((error) => {
+        console.log("jamendo fetch failed", error);
+        return [];
+      }),
+    ])
 
-    res.status(200).send({ message: "all songs ", data: getsong })
+    res.status(200).send({ message: "all songs ", data: [...getsong, ...jamendoSongs] })
 
   } catch (error) {
     console.log("errorr", error);

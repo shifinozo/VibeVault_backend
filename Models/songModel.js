@@ -22,8 +22,14 @@ const songSchema = new mongoose.Schema({
         type:String,
         required:false,
         unique:true
+    },
+    jamendoId: {
+        type:String,
+        required:false,
+        unique:true,
+        sparse:true
     }
-       
-    
+
+
 })
 export const songModel=mongoose.model("songs",songSchema)
