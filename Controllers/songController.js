@@ -1,56 +1,48 @@
-import cloudinary, { uploadToCloudinary } from "../config/cloudinaryconfig.js";
+import cloudinary from "../config/cloudinaryconfig.js";
 import { songModel } from "../Models/songModel.js";
 import { fetchJamendoTracks } from "../config/jamendoconfig.js";
-import streamifier from "streamifier"
 
-// MP3 uploader
-const uploadSongToCloudinary = (buffer) => {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        resource_type: "video",
-        folder: "songs",
-      },
-      (error, result) => {
-        if (error) return reject(error);
-        resolve(result.secure_url);
-      }
+// Vercel serverless functions cap request bodies at ~4.5MB, so audio/image
+// files can't be uploaded through this backend. The frontend instead uploads
+// directly to Cloudinary using a signature from this endpoint, and only
+// sends us the resulting URLs.
+export const getUploadSignature = async (req, res) => {
+  try {
+    const { folder } = req.body;
+    if (!folder) {
+      return res.status(400).json({ error: "folder is required" });
+    }
+
+    const timestamp = Math.round(Date.now() / 1000);
+    const signature = cloudinary.utils.api_sign_request(
+      { timestamp, folder },
+      process.env.CLOUDINARY_API_SECRET
     );
 
-    streamifier.createReadStream(buffer).pipe(stream);
-  });
-};
-
-// Image uploader
-
-const uploadImageToCloudinary = (buffer) => {
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        resource_type: "image",
-        folder: "song-images",
-      },
-      (error, result) => {
-        if (error) return reject(error);
-        resolve(result.secure_url);
-      }
-    );
-
-    streamifier.createReadStream(buffer).pipe(stream);
-  });
+    res.status(200).json({
+      signature,
+      timestamp,
+      apiKey: process.env.CLOUDINARY_API_KEY,
+      cloudName: process.env.CLOUDINARY_CLOUD,
+      folder,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to generate upload signature" });
+  }
 };
 
 // addsong Controller
 
 export const addsong = async (req, res) => {
   try {
-    if (!req.files?.file || !req.files?.image) {
+    const { title, artist, filePath, imagePath } = req.body;
+
+    if (!title || !artist || !filePath || !imagePath) {
       return res.status(400).json({
-        error: "Please upload both song and image",
+        error: "Please provide title, artist, filePath and imagePath",
       });
     }
-
-    const { title, artist } = req.body;
 
     const alreadyexist = await songModel.findOne({ title, artist });
     if (alreadyexist) {
@@ -60,17 +52,11 @@ export const addsong = async (req, res) => {
       });
     }
 
-    // 🎵 Parallel Uploads (Much Faster!)
-    const [songUrl, imageUrl] = await Promise.all([
-      uploadSongToCloudinary(req.files.file[0].buffer),
-      uploadImageToCloudinary(req.files.image[0].buffer)
-    ]);
-
     const song = await songModel.create({
       title,
       artist,
-      filePath: songUrl,
-      imagePath: imageUrl,
+      filePath,
+      imagePath,
     });
 
     res.status(201).json({
